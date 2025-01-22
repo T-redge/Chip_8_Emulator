@@ -1,8 +1,5 @@
-/*
- *Create an CHIP_8 interpretor which prints IBM logo to console.
- *Next step would be to transfer that to GRAPHICS instead of console.
- */
-#include <stdio.h>
+#include "stack.h"
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <SDL.h>
@@ -10,36 +7,49 @@
 typedef unsigned char  BYTE;
 typedef unsigned short DUPLET;
 
+typedef struct Stack Stack;
+
 const int SCREEN_WIDTH  = 64;
 const int SCREEN_HEIGHT = 32;
+const int VIDEO_SCALE	= 20;
+
+const int MEMORY_SIZE	= 4096;
 
 SDL_Window *window	= NULL;
 SDL_Renderer *renderer	= NULL;
 SDL_Texture *texture 	= NULL;
 
-bool load_rom(BYTE *memory);									//loads rom into memory
-long get_file_size(FILE* file);									//Aquires file size for memory allocation
-DUPLET get_opcode(BYTE *memory, DUPLET *p_c);							//Gets operator code from memory
+bool load_rom(BYTE *memory);											//loads rom into memory
+long get_file_size(FILE* file);											//Aquires file size for memory allocation
+DUPLET get_opcode(BYTE *memory, DUPLET *p_c);									//Gets operator code from memory
 
-void opcodeEO(BYTE display[][SCREEN_HEIGHT]);							//Sets Display to 0's
-void opcode1NNN(DUPLET opcode, DUPLET *p_c);							//Sets p_c to NNN
-void opcode6XNN(DUPLET opcode, BYTE *var_reg);  						//Sets register vx to NN
-void opcode7XNN(DUPLET opcode, BYTE *var_reg);							//Adds NN to register vx
-void opcodeANNN(DUPLET opcode, DUPLET *i_reg);							//Sets I_reg to NNN
-void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][32], BYTE *memory); 	//Display
+void opcodeEO(BYTE display[][SCREEN_HEIGHT]);									//Sets Display to 0's
+void opcode1NNN(DUPLET opcode, DUPLET *p_c);									//Sets p_c to NNN
+void opcode2NNN(DUPLET opcode, DUPLET *p_c, Stack *stack);							//Pushes current p_c to stack and jumps to NNN
+void opcode3XNN(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx == NN
+void opcode4XNN(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx != NN
+void opcode5XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx == vy
+void opcode6XNN(DUPLET opcode, BYTE *var_reg);  								//Sets register vx to NN
+void opcode7XNN(DUPLET opcode, BYTE *var_reg);									//Adds NN to register vx
+void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							////skips one instruction if vx != vy
+void opcodeANNN(DUPLET opcode, DUPLET *i_reg);									//Sets I_reg to NNN
+void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory); 	//Display
 
-bool init(void);										//Initializes SDL2
-void quit(void);										//Quits and cleans SDL2
+bool init(void);												//Initializes SDL2
+void quit(void);												//Quits and cleans SDL2
 
 int main(int argc, char *argv[]) {
 	
-	BYTE memory[4096];				//Load font/rom into
+	BYTE memory[MEMORY_SIZE];			//Load font/rom into
 	BYTE display[SCREEN_WIDTH][SCREEN_HEIGHT];	//Sets to 1(on) or 0(off)
 	BYTE var_reg[16];				//Holds different variables
 	
 	DUPLET p_c;					//Program counter points to current instruction in memory
 	DUPLET opcode;					//Holds current operating code p_c is pointing to
 	DUPLET i_reg;					//Points at locations in memory
+	
+	Stack stack;
+	stack.top = 0;
 	
 	Uint32 *pixels;
 	int pitch;
@@ -50,6 +60,8 @@ int main(int argc, char *argv[]) {
 		printf("SDL2 initialized\n");
 		bool running = true;
 		SDL_Event e;
+		
+		
 		
 		if (!load_rom(memory)) {
 			printf("Rom not loaded\n");
@@ -85,51 +97,75 @@ int main(int argc, char *argv[]) {
 			}
 			printf("\n");
 			
-			switch (opcode & 0xF000) {
-			case 0x0000:
-				printf("0x0000, decoding further\n");
-				switch (opcode & 0x00FF) {
-				case 0xE0:
-					printf("0x00E0, clear screen\n");
-					opcodeEO(display);
-					for (int y = 0; y < 32; ++y) {
-						for(int x = 0; x < 64; ++x) {
-							printf("%d", display[x][y]);
-						}
-						printf("\n");
+		switch (opcode & 0xF000) {
+		case 0x0000:
+			printf("0x0000, decoding further\n");
+			switch (opcode & 0x00FF) {
+			case 0xE0:
+				printf("0x00E0, clear screen\n");
+				opcodeEO(display);
+				for (int y = 0; y < 32; ++y) {
+					for(int x = 0; x < 64; ++x) {
+						printf("%d", display[x][y]);
 					}
-					break;
-				default:
-					printf("Opcode not recognised\n");
-					running = false;
-					break;
+					printf("\n");
 				}
-				break;
-			case 0x1000:
-				printf("0x1000, Setting p_c to NNN\n");
-				opcode1NNN(opcode, &p_c);
-				break;
-			case 0x6000:
-				printf("0x6000, Setting var_reg\n");
-				opcode6XNN(opcode, var_reg);
-				break;
-			case 0x7000:
-				printf("0x7000, Adding to vx\n");
-				opcode7XNN(opcode, var_reg);
-				break;
-			case 0xA000:
-				printf("0xA000, Setting index register\n");
-				opcodeANNN(opcode, &i_reg);
-				break;
-			case 0xD000:
-				printf("0xD000, Drawing\n");
-				opcodeDXYN(opcode, var_reg, i_reg, display, memory);
 				break;
 			default:
 				printf("Opcode not recognised\n");
 				running = false;
 				break;
 			}
+			break;
+		case 0x1000:
+			printf("0x1000, Setting p_c to NNN\n");
+			opcode1NNN(opcode, &p_c);
+			break;
+		case 0x2000:
+			printf("0x2000, pushing current p_c to stack and jumping to NNN\n");
+			opcode2NNN(opcode, &p_c, &stack);
+			break;
+		case 0x3000:
+			printf("0x3000, Skipping on p_c instruction if vx equal NN\n");
+			opcode3XNN(opcode, &p_c, var_reg);
+			break;
+		case 0x4000:
+			printf("0x4000, Skipping on p_c instruction if vx not equal NN\n");
+			opcode4XNN(opcode, &p_c, var_reg);
+			break;
+		case 0x5000:
+			printf("0x5000, Skipping on p_c instruction if vx equals vy\n");
+			opcode5XY0(opcode, &p_c, var_reg);
+			break;
+		case 0x6000:
+			printf("0x6000, Setting var_reg\n");
+			opcode6XNN(opcode, var_reg);
+			break;
+		case 0x7000:
+			printf("0x7000, Adding to vx\n");
+			opcode7XNN(opcode, var_reg);
+			break;
+		case 0x9000:
+			printf("0x9000, Skipping on p_c instruction if vx doesnt equal vy\n");
+			opcode9XY0(opcode, &p_c, var_reg);
+			break;
+		case 0xA000:
+			printf("0xA000, Setting index register\n");
+			opcodeANNN(opcode, &i_reg);
+			break;
+		case 0xD000:
+			printf("0xD000, Drawing\n");
+			opcodeDXYN(opcode, var_reg, i_reg, display, memory);
+			break;
+		default:
+			printf("Opcode not recognised\n");
+			running = false;
+			break;
+		}
+		
+		
+		
+		
 		SDL_LockTexture(texture,NULL,(void**)&pixels, &pitch);
 		SDL_memset(pixels, 255, pitch * 32);
 		
@@ -153,7 +189,7 @@ int main(int argc, char *argv[]) {
 
 bool load_rom(BYTE *memory)
 {
-	const char *file_name = "IBMLogo.ch8";
+	const char *file_name = "ch8/corax.ch8";
 	bool success = true;
 	
 	FILE *file_open = fopen(file_name, "rb");
@@ -197,10 +233,10 @@ DUPLET get_opcode(BYTE *memory, DUPLET *p_c)
 	
 	return tmp;
 }
-void opcodeEO(BYTE display[][32])
+void opcodeEO(BYTE display[][SCREEN_HEIGHT])
 {
-	for (int x = 0; x < 64; ++x)
-		for(int y = 0; y < 32; ++y)
+	for(int y = 0; y < 32; ++y)
+		for (int x = 0; x < 64; ++x)
 			display[x][y] = 0;
 }
 void opcodeANNN(DUPLET opcode, DUPLET *i_reg)
@@ -211,13 +247,14 @@ void opcodeANNN(DUPLET opcode, DUPLET *i_reg)
 }
 void opcode6XNN(DUPLET opcode, BYTE *var_reg)
 {
-	DUPLET vx, tmp;
+	DUPLET vx;
+	BYTE tmp;
 	vx = (opcode & 0x0F00) >> 8;
 	tmp = opcode & 0x00FF;
 	
 	var_reg[vx] = tmp;
 }
-void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][32], BYTE *memory)
+void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory)
 {
 	DUPLET vx, vy, rows, coord_x, coord_y, sprite_data;
 	vx = opcode & 0x0F00;
@@ -274,6 +311,77 @@ void opcode1NNN(DUPLET opcode, DUPLET *p_c)
 	
 	*p_c = tmp;
 }
+void opcode3XNN(DUPLET opcode, DUPLET *p_c, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET tmp = opcode & 0x00FF;
+	
+	if (var_reg[vx] == tmp) {
+		printf("Skipping\n");
+		*p_c += 2;
+		
+	}
+	
+	printf("vx: %X\n", vx);
+	printf("tmp: %X\n", tmp);
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+void opcode4XNN(DUPLET opcode, DUPLET *p_c, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET tmp = opcode & 0x00FF;
+	
+	if (var_reg[vx] != tmp) {
+		printf("Skipping\n");
+		*p_c += 2;
+		
+	}
+	
+	printf("vx: %X\n", vx);
+	printf("tmp: %X\n", tmp);
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+void opcode5XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET vy = (opcode & 0x00F0) >> 4;
+	
+	if (var_reg[vx] == var_reg[vy]) {
+		printf("Skipping\n");
+		*p_c += 2;
+		
+	}
+	
+	printf("vx: %X\n", vx);
+	printf("vy: %X\n", vy);
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+	printf("var_reg[%X]: %X\n", vy, var_reg[vy]);
+}
+void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET vy = (opcode & 0x00F0) >> 4;
+	
+	if (var_reg[vx] != var_reg[vy]) {
+		printf("Skipping\n");
+		*p_c += 2;
+	}
+	
+	printf("vx: %X\n", vx);
+	printf("vy: %X\n", vy);
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+	printf("var_reg[%X]: %X\n", vy, var_reg[vy]);
+}
+void opcode2NNN(DUPLET opcode, DUPLET *p_c,Stack *stack)
+{
+	DUPLET tmp = opcode & 0x0FFF;
+	
+	push(stack, *p_c);
+	
+	*p_c = tmp;
+	printf("Jumping to: %X\n", tmp);
+}
+
 bool init(void)
 {
 	bool success = true;
@@ -282,7 +390,7 @@ bool init(void)
 		printf("Error initializing SDL: %s\n", SDL_GetError());
 		success = false;
 	} else {
-		window = SDL_CreateWindow("CHIP8", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH * 10,SCREEN_HEIGHT * 10, SDL_WINDOW_SHOWN);
+		window = SDL_CreateWindow("CHIP8", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH * VIDEO_SCALE,SCREEN_HEIGHT * VIDEO_SCALE, SDL_WINDOW_SHOWN);
 		if (window == NULL) {
 			printf("Window could not be created!\n");
 			success = false;
@@ -292,7 +400,7 @@ bool init(void)
 				printf("Renderer could not be created!\n");
 				success = false;
 			} else {
-				SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 				texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
 				if (texture == NULL) {
 					printf("Texture could not be created!\n");
@@ -306,6 +414,7 @@ bool init(void)
 }
 void quit(void)
 {
+	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
