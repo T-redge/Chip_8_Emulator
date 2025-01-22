@@ -16,5 +16,6 @@ typedef struct Stack
 }Stack;
 
 void push(Stack *st, DUPLET new_address);
+DUPLET pop(Stack *st);
 
 #endif//STRUCTS_H

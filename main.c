@@ -24,6 +24,7 @@ long get_file_size(FILE* file);											//Aquires file size for memory allocat
 DUPLET get_opcode(BYTE *memory, DUPLET *p_c);									//Gets operator code from memory
 
 void opcodeEO(BYTE display[][SCREEN_HEIGHT]);									//Sets Display to 0's
+void opcodeEE(DUPLET *p_c, Stack *stack);									//Returns from address at top of stack
 void opcode1NNN(DUPLET opcode, DUPLET *p_c);									//Sets p_c to NNN
 void opcode2NNN(DUPLET opcode, DUPLET *p_c, Stack *stack);							//Pushes current p_c to stack and jumps to NNN
 void opcode3XNN(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx == NN
@@ -31,7 +32,9 @@ void opcode4XNN(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one in
 void opcode5XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx == vy
 void opcode6XNN(DUPLET opcode, BYTE *var_reg);  								//Sets register vx to NN
 void opcode7XNN(DUPLET opcode, BYTE *var_reg);									//Adds NN to register vx
-void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							////skips one instruction if vx != vy
+void opcode8XY0(DUPLET opcode, BYTE *var_reg);									//Sets vx to vy
+void opcode8XY1(DUPLET opcode, BYTE *var_reg);									//Sets vx to vx OR vy
+void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx != vy
 void opcodeANNN(DUPLET opcode, DUPLET *i_reg);									//Sets I_reg to NNN
 void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory); 	//Display
 
@@ -68,9 +71,6 @@ int main(int argc, char *argv[]) {
 			return 1;
 		} else {
 			printf("Rom loaded\n");
-			for (int i = 512; i < 645; ++i)
-				printf("%X\t", memory[i]);
-			printf("\n");
 		}
 		
 		for (int x = 0; x < 16; ++x)
@@ -78,38 +78,30 @@ int main(int argc, char *argv[]) {
 		i_reg = 0;
 		p_c = 512;
 		
+		printf("\n");
 		while (running) {
 			while (SDL_PollEvent(&e) != 0) {
 				if (e.type == SDL_QUIT) {
 					running = false;
 				}
 			}
+			printf("Getting opcode!\n");
 			opcode = get_opcode(memory, &p_c);
 			
-			printf("\n");
-			printf("Opcode: %X\n", opcode);
-			printf("P_C: %X\n", p_c);
-			printf("I_Reg: %X\n", i_reg);
-			for (int x = 0; x < 16; ++x) {
-				printf("var_reg[%d]: %X\t", x, var_reg[x]);
-				if ((x % 5 == 0))
-					printf("\n");
-			}
-			printf("\n");
 			
+		printf("\n");	
 		switch (opcode & 0xF000) {
 		case 0x0000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x0000, decoding further\n");
 			switch (opcode & 0x00FF) {
 			case 0xE0:
 				printf("0x00E0, clear screen\n");
 				opcodeEO(display);
-				for (int y = 0; y < 32; ++y) {
-					for(int x = 0; x < 64; ++x) {
-						printf("%d", display[x][y]);
-					}
-					printf("\n");
-				}
+				break;
+			case 0xEE:
+				printf("0x00EE, returning subroutine\n");
+				opcodeEE(&p_c, &stack);
 				break;
 			default:
 				printf("Opcode not recognised\n");
@@ -118,52 +110,96 @@ int main(int argc, char *argv[]) {
 			}
 			break;
 		case 0x1000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x1000, Setting p_c to NNN\n");
 			opcode1NNN(opcode, &p_c);
+			printf("P_C: %X\n", p_c);
 			break;
 		case 0x2000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x2000, pushing current p_c to stack and jumping to NNN\n");
 			opcode2NNN(opcode, &p_c, &stack);
 			break;
 		case 0x3000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x3000, Skipping on p_c instruction if vx equal NN\n");
 			opcode3XNN(opcode, &p_c, var_reg);
 			break;
 		case 0x4000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x4000, Skipping on p_c instruction if vx not equal NN\n");
 			opcode4XNN(opcode, &p_c, var_reg);
 			break;
 		case 0x5000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x5000, Skipping on p_c instruction if vx equals vy\n");
 			opcode5XY0(opcode, &p_c, var_reg);
 			break;
 		case 0x6000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x6000, Setting var_reg\n");
 			opcode6XNN(opcode, var_reg);
+			printf("I_Reg: %X\n", i_reg);
+			for (int x = 0; x < 16; ++x) {
+				printf("var_reg[%X]: %X\t", x, var_reg[x]);
+				if ((x % 5 == 0))
+					printf("\n");
+			}
+			printf("\n");
 			break;
 		case 0x7000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x7000, Adding to vx\n");
 			opcode7XNN(opcode, var_reg);
 			break;
+		case 0x8000:
+			printf("Opcode: %X\n", opcode);
+			printf("0x8000, decoding further\n");
+			switch(opcode & 0x000F) {
+			case 0x0:
+				printf("0x8XY0, sets value of vx to vy\n");
+				opcode8XY0(opcode, var_reg);
+				break;
+			case 0x1:
+				printf("0x8XY1, Sets vx to vx or vy\n");
+				opcode8XY1(opcode, var_reg);
+				break;
+			default:
+				printf("Opcode not recognised\n");
+				running = false;
+				break;
+			}
+			for (int x = 0; x < 16; ++x) {
+				printf("var_reg[%X]: %X\t", x, var_reg[x]);
+				if ((x % 5 == 0))
+					printf("\n");
+				}
+				printf("\n");
+			break;
 		case 0x9000:
+			printf("Opcode: %X\n", opcode);
 			printf("0x9000, Skipping on p_c instruction if vx doesnt equal vy\n");
 			opcode9XY0(opcode, &p_c, var_reg);
 			break;
 		case 0xA000:
+			printf("Opcode: %X\n", opcode);
 			printf("0xA000, Setting index register\n");
 			opcodeANNN(opcode, &i_reg);
+			printf("Index_Reg set: %X\n", i_reg);
 			break;
 		case 0xD000:
+			printf("Opcode: %X\n", opcode);
 			printf("0xD000, Drawing\n");
 			opcodeDXYN(opcode, var_reg, i_reg, display, memory);
 			break;
 		default:
+			printf("Opcode: %X\n", opcode);
 			printf("Opcode not recognised\n");
 			running = false;
 			break;
 		}
-		
-		
+		printf("\n");
+		printf("p_c: %X\n", p_c);
 		
 		
 		SDL_LockTexture(texture,NULL,(void**)&pixels, &pitch);
@@ -202,11 +238,8 @@ bool load_rom(BYTE *memory)
 	
 	
 	BYTE *buffer = malloc(file_size * sizeof(char));
-	while (fread(buffer, sizeof(buffer[0]), file_size, file_open) != 0) {
-		for (size_t i = 0; i < file_size; ++i) 
-			printf("%X\t", buffer[i]);
-		printf("\n");
-	}
+	while (fread(buffer, sizeof(buffer[0]), file_size, file_open) != 0)
+		;
 	
 	for (size_t i = 0; i < file_size; ++i)
 		memory[512 + i] = buffer[i];
@@ -257,7 +290,7 @@ void opcode6XNN(DUPLET opcode, BYTE *var_reg)
 void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory)
 {
 	DUPLET vx, vy, rows, coord_x, coord_y, sprite_data;
-	vx = opcode & 0x0F00;
+	vx = (opcode & 0x0F00) >> 8;
 	vy = (opcode & 0x00F0) >> 4;
 	rows = opcode & 0x000F;
 	
@@ -270,14 +303,16 @@ void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREE
 
 	for (int i = 0; i < rows; ++i) {
 		sprite_data = memory[i_reg + i];
-		printf("Sprite_data: %X\n", sprite_data);
+		printf("Sprite_data: %X\t", sprite_data);
+		
 		int xpixelinv = 7;
 		int xpixel = 0;
 		
-		
+		printf("\n");
 		for (xpixel = 0; xpixel < 8; ++xpixel, --xpixelinv) {
 			int mask = 1 << xpixelinv;
-			printf("%X\n", mask);
+			
+			printf("%X\t", mask);
 			if (sprite_data & mask) {
 				int x = coord_x + xpixel;
 				int y = coord_y + i;
@@ -286,6 +321,7 @@ void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREE
 				display[x][y] ^= 1;
 			}
 		}
+		printf("\n");
 	}
 	for (int y = 0; y < 32; ++y) {
 		for(int x = 0; x < 64; ++x) {
@@ -293,14 +329,15 @@ void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREE
 		}
 		printf("\n");
 	}
+	printf("\n");
 }
 void opcode7XNN(DUPLET opcode, BYTE *var_reg)
 {
 	DUPLET vx, tmp;
-	vx = opcode & 0x0F00;
+	vx = (opcode & 0x0F00) >> 8;
 	tmp = opcode & 0x00FF;
 	
-	var_reg[vx] = var_reg[vx] + tmp;
+	var_reg[vx] += tmp;
 	
 	printf("vx: %X, tmp: %X, var_reg[%X]: %X\n", vx, tmp, vx, var_reg[vx]);
 }
@@ -381,6 +418,29 @@ void opcode2NNN(DUPLET opcode, DUPLET *p_c,Stack *stack)
 	*p_c = tmp;
 	printf("Jumping to: %X\n", tmp);
 }
+void opcodeEE(DUPLET *p_c, Stack *stack)
+{
+	*p_c = pop(stack);
+}
+void opcode8XY0(DUPLET opcode, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET vy = (opcode & 0x00F0) >> 4;
+	
+	var_reg[vx] = var_reg[vy];
+}
+void opcode8XY1(DUPLET opcode, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET vy = (opcode & 0x00F0) >> 4;
+	
+	printf("vx: %X, vy: %X\n", vx, vy);
+	
+	var_reg[vx] |= var_reg[vy];
+	
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+
 
 bool init(void)
 {
