@@ -20,7 +20,7 @@ SDL_Renderer *renderer	= NULL;
 SDL_Texture *texture 	= NULL;
 
 bool load_rom(BYTE *memory);											//loads rom into memory
-long get_file_size(FILE* file);											//Aquires file size for memory allocation
+long long get_file_size(FILE* file);										//Aquires file size for memory allocation
 DUPLET get_opcode(BYTE *memory, DUPLET *p_c);									//Gets operator code from memory
 
 void opcodeEO(BYTE display[][SCREEN_HEIGHT]);									//Sets Display to 0's
@@ -34,6 +34,13 @@ void opcode6XNN(DUPLET opcode, BYTE *var_reg);  								//Sets register vx to NN
 void opcode7XNN(DUPLET opcode, BYTE *var_reg);									//Adds NN to register vx
 void opcode8XY0(DUPLET opcode, BYTE *var_reg);									//Sets vx to vy
 void opcode8XY1(DUPLET opcode, BYTE *var_reg);									//Sets vx to vx OR vy
+void opcode8XY2(DUPLET opcode, BYTE *var_reg);									//Sets vx to vx AND vy
+void opcode8XY3(DUPLET opcode, BYTE *var_reg);									//Sets vx to vx ZOR vy
+void opcode8XY4(DUPLET opcode, BYTE *var_reg);									//Sets vx to vx += vy if overflow var_reg set to 1 else 0
+void opcode8XY5(DUPLET opcode, BYTE *var_reg);									//Sets vx to vx -= vy if underflow var_reg set to 0 else 1
+void opcode8XY6(DUPLET opcode, BYTE *var_reg);									//Sets vf to vx >> 1
+void opcode8XYE(DUPLET opcode, BYTE *var_reg);									//Sets vf to vx << 1
+void opcode8XY7(DUPLET opcode, BYTE *var_reg);									//Sets vx to vy - vx var_reg16 set if vy >= vx
 void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx != vy
 void opcodeANNN(DUPLET opcode, DUPLET *i_reg);									//Sets I_reg to NNN
 void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory); 	//Display
@@ -164,6 +171,34 @@ int main(int argc, char *argv[]) {
 				printf("0x8XY1, Sets vx to vx or vy\n");
 				opcode8XY1(opcode, var_reg);
 				break;
+			case 0x2:
+				printf("0x8XY2, Sets vx to vx and vy\n");
+				opcode8XY2(opcode, var_reg);
+				break;
+			case 0x3:
+				printf("0x8XY3, Sets vx to vx zor vy\n");
+				opcode8XY3(opcode, var_reg);
+				break;
+			case 0x4:
+				printf("0x8XY4, Sets vx to vx += vy\n");
+				opcode8XY4(opcode, var_reg);
+				break;
+			case 0x5:
+				printf("0x8XY5, Sets vx to vx -= vy var_reg[16] set if underflow\n");
+				opcode8XY5(opcode, var_reg);
+				break;
+			case 0x6:
+				printf("0x8XY6, sets vf to vx >> 1\n");
+				opcode8XY6(opcode, var_reg);
+				break;
+			case 0x7:
+				printf("0x8XY7, Sets vx to vy - vx var_reg[16] sets flag if vy >= vx\n");
+				opcode8XY7(opcode, var_reg);
+				break;
+			case 0xE:
+				printf("0x8XY6, sets vf to vx << 1\n");
+				opcode8XYE(opcode, var_reg);
+				break;
 			default:
 				printf("Opcode not recognised\n");
 				running = false;
@@ -248,11 +283,15 @@ bool load_rom(BYTE *memory)
 	fclose(file_open);
 	return success;
 }
-long get_file_size(FILE *file)
+long long get_file_size(FILE *file)
 {
 	fseek(file, sizeof(char), SEEK_END);
-	long int tmp = ftell(file);
-	printf("Size of file is: %ld bytes\n", tmp);
+#ifdef WIN32
+	long long tmp = _ftelli64(file);
+#else 
+	long long tmp = ftell(file);
+#endif
+	printf("Size of file is: %lld bytes\n", tmp);
 	rewind(file);
 	
 	return tmp;
@@ -440,37 +479,126 @@ void opcode8XY1(DUPLET opcode, BYTE *var_reg)
 	
 	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
 }
+void opcode8XY2(DUPLET opcode, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET vy = (opcode & 0x00F0) >> 4;
+	
+	printf("vx: %X, vy: %X\n", vx, vy);
+	
+	var_reg[vx] &= var_reg[vy];
+	
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+void opcode8XY3(DUPLET opcode, BYTE *var_reg)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	DUPLET vy = (opcode & 0x00F0) >> 4;
+	
+	printf("vx: %X, vy: %X\n", vx, vy);
+	
+	var_reg[vx] ^= var_reg[vy];
+	
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+void opcode8XY4(DUPLET opcode, BYTE *var_reg)
+{
+	BYTE vx = (opcode & 0x0F00) >> 8;
+	BYTE vy = (opcode & 0x00F0) >> 4;
+	
+	printf("vx: %X, vy: %X\n", vx, vy);
+	
+	DUPLET tmp = var_reg[vx] + var_reg[vy];
+	if (tmp > 255)
+		var_reg[16] = 1;
+	else
+		var_reg[16] = 0;
+	
+	var_reg[vx] += var_reg[vy];
+	
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+void opcode8XY5(DUPLET opcode, BYTE *var_reg)
+{
+	BYTE vx = (opcode & 0x0F00) >> 8;
+	BYTE vy = (opcode & 0x00F0) >> 4;
+	
+	printf("vx: %X, vy: %X\n", vx, vy);
+	
+	if (var_reg[vx] >= var_reg[vy])
+		var_reg[16] = 1;
+	else
+		var_reg[16] = 0;
+	
+	var_reg[vx] -= var_reg[vy];
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+void opcode8XY6(DUPLET opcode, BYTE *var_reg)
+{
+	BYTE vx = (opcode & 0x0F00) >> 8;
+	
+	var_reg[0xF] = var_reg[vx] & 0x1;
+	
+	printf("%X\n",var_reg[0xF]);
+	
+	var_reg[vx] >>= 1;
+	
+	
+	
+}
+void opcode8XY7(DUPLET opcode, BYTE *var_reg)
+{
+	BYTE vx = (opcode & 0x0F00) >> 8;
+	BYTE vy = (opcode & 0x00F0) >> 4;
+	
+	printf("vx: %X, vy: %X\n", vx, vy);
+	
+	if (var_reg[vy] >= var_reg[vx])
+		var_reg[16] = 1;
+	else
+		var_reg[16] = 0;
+	
+	var_reg[vx] = var_reg[vy] - var_reg[vx];
+	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
+}
+
+void opcode8XYE(DUPLET opcode, BYTE *var_reg)
+{
+	BYTE vx = (opcode & 0x0F00) >> 8;
+	
+	var_reg[0xF] = var_reg[vx] & 0x1;
+	
+	printf("%X\n",var_reg[0xF]);
+	
+	var_reg[vx] <<= 1;
+}
+
+
 
 
 bool init(void)
 {
-	bool success = true;
-	
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
 		printf("Error initializing SDL: %s\n", SDL_GetError());
-		success = false;
-	} else {
-		window = SDL_CreateWindow("CHIP8", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH * VIDEO_SCALE,SCREEN_HEIGHT * VIDEO_SCALE, SDL_WINDOW_SHOWN);
-		if (window == NULL) {
-			printf("Window could not be created!\n");
-			success = false;
-		} else {
-			renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-			if (renderer == NULL) {
-				printf("Renderer could not be created!\n");
-				success = false;
-			} else {
-				SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-				texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
-				if (texture == NULL) {
-					printf("Texture could not be created!\n");
-					success = false;
-				}
-			}
-		}
+		return false;
 	}
-	
-	return success;
+	window = SDL_CreateWindow("CHIP8", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH * VIDEO_SCALE,SCREEN_HEIGHT * VIDEO_SCALE, SDL_WINDOW_SHOWN);
+	if (window == NULL) {
+		printf("Window could not be created!\n");
+		return false;
+	}
+	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	if (renderer == NULL) {
+		printf("Renderer could not be created!\n");
+		return false;
+	}
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+	if (texture == NULL) {
+		printf("Texture could not be created!\n");
+		return false;
+	}
+	return true;
 }
 void quit(void)
 {
