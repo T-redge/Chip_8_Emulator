@@ -44,6 +44,9 @@ void opcode8XY7(DUPLET opcode, BYTE *var_reg);									//Sets vx to vy - vx var_
 void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx != vy
 void opcodeANNN(DUPLET opcode, DUPLET *i_reg);									//Sets I_reg to NNN
 void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory); 	//Display
+void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg);							//Binary coded decimal conversion
+void opcodeFX55(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory);					//Loads var_reg into memory
+void opcodeFX65(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory);					//Loads memory into v[0] to v[X]
 
 bool init(void);												//Initializes SDL2
 void quit(void);												//Quits and cleans SDL2
@@ -208,8 +211,8 @@ int main(int argc, char *argv[]) {
 				printf("var_reg[%X]: %X\t", x, var_reg[x]);
 				if ((x % 5 == 0))
 					printf("\n");
-				}
-				printf("\n");
+			}
+			printf("\n");
 			break;
 		case 0x9000:
 			printf("Opcode: %X\n", opcode);
@@ -226,6 +229,29 @@ int main(int argc, char *argv[]) {
 			printf("Opcode: %X\n", opcode);
 			printf("0xD000, Drawing\n");
 			opcodeDXYN(opcode, var_reg, i_reg, display, memory);
+			break;
+		case 0xF000:
+			printf("Opcode: %X\n", opcode);
+			printf("0xF000, Decoding further\n");
+			switch(opcode & 0x00FF) {
+			case 0x33:
+				printf("0x33, Converting hex to decimal\n");
+				opcodeFX33(opcode, memory, i_reg);
+				running = false;
+				break;
+			case 0x55:
+				printf("0x55, Loading to memory\n");
+				opcodeFX55(opcode,var_reg,i_reg,memory);
+				break;
+			case 0x65:
+				printf("0x65, Loading from memory\n");
+				opcodeFX65(opcode, var_reg, i_reg, memory);
+				break;
+			default:
+				printf("Opcode not recognised\n");
+				running = false;
+				break;
+			}
 			break;
 		default:
 			printf("Opcode: %X\n", opcode);
@@ -561,7 +587,6 @@ void opcode8XY7(DUPLET opcode, BYTE *var_reg)
 	var_reg[vx] = var_reg[vy] - var_reg[vx];
 	printf("var_reg[%X]: %X\n", vx, var_reg[vx]);
 }
-
 void opcode8XYE(DUPLET opcode, BYTE *var_reg)
 {
 	BYTE vx = (opcode & 0x0F00) >> 8;
@@ -572,8 +597,40 @@ void opcode8XYE(DUPLET opcode, BYTE *var_reg)
 	
 	var_reg[vx] <<= 1;
 }
-
-
+void opcodeFX65(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	
+	DUPLET tmp = i_reg;
+	
+	for (DUPLET x = 0; x <= vx; ++x) {
+		var_reg[x] = memory[tmp];
+		printf("var_reg[%d]: %X\t", x, tmp);
+		++tmp;
+		printf("i_reg: %X\n", tmp);
+	}
+	printf("\n");
+}
+void opcodeFX55(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory)
+{
+	DUPLET vx = (opcode & 0x0F00) >> 8;
+	
+	DUPLET tmp = i_reg;
+	
+	for (DUPLET x = 0; x <= vx; ++x) {
+		memory[tmp] = var_reg[x];
+		printf("var_reg[%d]: %X\t", x, tmp);
+		++tmp;
+		printf("i_reg: %X\n", tmp);
+	}
+	printf("\n");
+}
+void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg)
+{
+	BYTE vx = (opcode & 0x0F00) >> 8;
+	
+	printf("%X\n", vx);
+}
 
 
 bool init(void)
