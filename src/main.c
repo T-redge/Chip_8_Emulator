@@ -44,7 +44,7 @@ void opcode8XY7(DUPLET opcode, BYTE *var_reg);									//Sets vx to vy - vx var_
 void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx != vy
 void opcodeANNN(DUPLET opcode, DUPLET *i_reg);									//Sets I_reg to NNN
 void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory); 	//Display
-void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg);							//Binary coded decimal conversion
+void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg, BYTE *var_reg);							//Binary coded decimal conversion
 void opcodeFX55(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory);					//Loads var_reg into memory
 void opcodeFX65(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory);					//Loads memory into v[0] to v[X]
 
@@ -236,8 +236,11 @@ int main(int argc, char *argv[]) {
 			switch(opcode & 0x00FF) {
 			case 0x33:
 				printf("0x33, Converting hex to decimal\n");
-				opcodeFX33(opcode, memory, i_reg);
-				running = false;
+				opcodeFX33(opcode, memory, i_reg, var_reg);
+				printf("Memory[%X]: %X\t", i_reg, memory[i_reg]);
+				printf("Memory[%X]: %X\t", i_reg+1, memory[i_reg+1]);
+				printf("Memory[%X]: %X\t", i_reg+2, memory[i_reg+2]);
+				//running = false;
 				break;
 			case 0x55:
 				printf("0x55, Loading to memory\n");
@@ -625,11 +628,22 @@ void opcodeFX55(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory)
 	}
 	printf("\n");
 }
-void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg)
+void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg, BYTE *var_reg)
 {
 	BYTE vx = (opcode & 0x0F00) >> 8;
+	printf("var_reg[%X]: %d\n", vx, var_reg[vx]);
 	
-	printf("%X\n", vx);
+	
+	BYTE tmp_one = var_reg[vx] / (10 * 10);
+	BYTE tmp_two = (var_reg[vx] % (10 * 10)) / 10;
+	BYTE tmp_three = (var_reg[vx] % 10) / 1;
+	printf("Tmp_one: %d\n", tmp_one);
+	printf("Tmp_two: %d\n", tmp_two);
+	printf("Tmp_three: %d\n", tmp_three);
+	
+	memory[i_reg]	= tmp_one;
+	memory[i_reg+1] = tmp_two;
+	memory[i_reg+2] = tmp_three;
 }
 
 
