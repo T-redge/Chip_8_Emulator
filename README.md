@@ -13,7 +13,9 @@ Steps
     - 5xy0
     - 6xnn
     - 7xnn
-    - 8xy0
-    - 8xy1
+    - 8xyn
     - Annn
     - DxyN
+    - Fx33
+    - Fx55
+    - Fx65
