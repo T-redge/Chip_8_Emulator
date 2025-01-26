@@ -3,7 +3,7 @@
 //Loading rom into memory
 bool load_rom(BYTE *memory)
 {
-	const char *file_name = "ch8/corax.ch8";
+	const char *file_name = "ch8/4flags.ch8";
 	bool success = true;
 	
 	FILE *file_open = fopen(file_name, "rb");
@@ -386,4 +386,10 @@ void opcodeFX1E(DUPLET opcode, BYTE *var_reg, DUPLET *i_reg)
 	
 	*i_reg += var_reg[vx];
 	
+}
+void opcodeBNNN(DUPLET opcode, BYTE *var_reg, BYTE *memory, DUPLET *p_c)
+{
+	DUPLET tmp = (opcode & 0xFFF);
+	
+	printf("tmp: %X\n", tmp);
 }

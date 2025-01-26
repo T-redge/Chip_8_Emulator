@@ -34,6 +34,9 @@ int main(int argc, char *argv[]) {
 	Uint32 *pixels;
 	int pitch;
 	
+	int random_number = rand();
+	srand(time(NULL));
+	
 	if (!init()) {
 		printf("Failed to initialize SDL2\n");
 	} else {
@@ -191,6 +194,12 @@ int main(int argc, char *argv[]) {
 			printf("0xA000, Setting index register\n");
 			opcodeANNN(opcode, &i_reg);
 			printf("Index_Reg set: %X\n", i_reg);
+			break;
+		case 0xB000:
+			printf("Opcode: %X\n", opcode);
+			printf("0xB000, Jumping to NNN + V0\n", opcode);
+			opcodeBNNN(opcode, var_reg, memory, p_c);
+			running = false;
 			break;
 		case 0xD000:
 			printf("Opcode: %X\n", opcode);

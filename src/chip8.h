@@ -50,6 +50,8 @@ void opcode8XYE(DUPLET opcode, BYTE *var_reg);									//Sets vf to vx << 1
 void opcode8XY7(DUPLET opcode, BYTE *var_reg);									//Sets vx to vy - vx var_reg16 set if vy >= vx
 void opcode9XY0(DUPLET opcode, DUPLET *p_c, BYTE *var_reg);							//skips one instruction if vx != vy
 void opcodeANNN(DUPLET opcode, DUPLET *i_reg);									//Sets I_reg to NNN
+void opcodeBNNN(DUPLET opcode, BYTE *var_reg, BYTE *memory, DUPLET p_c);					//Jumps to address NNN plus value of V0
+void opcodeCXNN(DUPLET opcode, BYTE *var_reg);									//Sets vx to NN binaryAND random number
 void opcodeDXYN(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE display[][SCREEN_HEIGHT], BYTE *memory); 	//Display
 void opcodeFX33(DUPLET opcode, BYTE *memory, DUPLET i_reg, BYTE *var_reg);					//Binary coded decimal conversion
 void opcodeFX55(DUPLET opcode, BYTE *var_reg, DUPLET i_reg, BYTE *memory);					//Loads var_reg into memory
